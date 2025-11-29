@@ -1,0 +1,717 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LP = Players.LocalPlayer
+local roles = {}
+
+local Murder, Sheriff, Hero
+local characterConnections = {}
+local healthBarConnections = {}
+local nameESPConnections = {}
+
+local playerGui = game:GetService("CoreGui")
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DragButtonGui"
+screenGui.Parent = playerGui
+screenGui.ResetOnSpawn = false
+
+-- ===== Frame contenedor de botones =====
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 210, 0, 310)
+mainFrame.Position = UDim2.new(0.5, -105, 0.1, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Parent = screenGui
+mainFrame.ZIndex = 10
+
+-- ===== Botón de toggle (mostrar/ocultar) =====
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0, 50, 0, 50)
+toggleButton.Position = UDim2.new(0, 0, 1, 10)
+toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+toggleButton.BorderSizePixel = 0
+toggleButton.AutoButtonColor = false
+toggleButton.Text = ""
+toggleButton.Parent = mainFrame
+toggleButton.ZIndex = 11
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 12)
+toggleCorner.Parent = toggleButton
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(100, 100, 120)
+toggleStroke.Thickness = 2
+toggleStroke.Transparency = 0.5
+toggleStroke.Parent = toggleButton
+
+local toggleIcon = Instance.new("TextLabel")
+toggleIcon.Name = "Icon"
+toggleIcon.Size = UDim2.new(1, 0, 1, 0)
+toggleIcon.BackgroundTransparency = 1
+toggleIcon.Text = "▲"
+toggleIcon.TextColor3 = Color3.fromRGB(150, 150, 160)
+toggleIcon.TextSize = 24
+toggleIcon.Font = Enum.Font.GothamBold
+toggleIcon.Parent = toggleButton
+
+-- Variables de arrastre
+local dragging = false
+local dragInput, dragStart, startPos
+local isMenuVisible = true
+
+-- Estados del ESP
+local isBodyESPActive = false
+local isHealthESPActive = false
+local isNameESPActive = false
+local updateConnection = nil
+
+-- ===== Función para crear botones =====
+local function createButton(name, position, text)
+    local buttonFrame = Instance.new("Frame")
+    buttonFrame.Name = name .. "Container"
+    buttonFrame.Size = UDim2.new(1, 0, 0, 70)
+    buttonFrame.Position = position
+    buttonFrame.BackgroundTransparency = 1
+    buttonFrame.Parent = mainFrame
+
+    local textButton = Instance.new("TextButton")
+    textButton.Name = name
+    textButton.Size = UDim2.new(1, 0, 1, 0)
+    textButton.Position = UDim2.new(0, 0, 0, 0)
+    textButton.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    textButton.BorderSizePixel = 0
+    textButton.AutoButtonColor = false
+    textButton.Text = ""
+    textButton.Parent = buttonFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 15)
+    corner.Parent = textButton
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 50)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 30))
+    }
+    gradient.Rotation = 45
+    gradient.Parent = textButton
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 100, 120)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.5
+    stroke.Parent = textButton
+
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 30, 0, 30)
+    icon.Position = UDim2.new(0, 15, 0.5, -15)
+    icon.BackgroundTransparency = 1
+    icon.Image = "rbxassetid://3926305904"
+    icon.ImageColor3 = Color3.fromRGB(150, 150, 160)
+    icon.Parent = textButton
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, -60, 0.5, 0)
+    statusLabel.Position = UDim2.new(0, 55, 0, 5)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = text
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+    statusLabel.TextSize = 18
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = textButton
+
+    local stateLabel = Instance.new("TextLabel")
+    stateLabel.Name = "StateLabel"
+    stateLabel.Size = UDim2.new(1, -60, 0.5, 0)
+    stateLabel.Position = UDim2.new(0, 55, 0.5, -5)
+    stateLabel.BackgroundTransparency = 1
+    stateLabel.Text = "Desactivado"
+    stateLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
+    stateLabel.TextSize = 14
+    stateLabel.Font = Enum.Font.Gotham
+    stateLabel.TextXAlignment = Enum.TextXAlignment.Left
+    stateLabel.Parent = textButton
+
+    local indicator = Instance.new("Frame")
+    indicator.Name = "Indicator"
+    indicator.Size = UDim2.new(0, 10, 0, 10)
+    indicator.Position = UDim2.new(1, -20, 0.5, -5)
+    indicator.BackgroundColor3 = Color3.fromRGB(150, 150, 160)
+    indicator.BorderSizePixel = 0
+    indicator.Parent = textButton
+
+    local indicatorCorner = Instance.new("UICorner")
+    indicatorCorner.CornerRadius = UDim.new(1, 0)
+    indicatorCorner.Parent = indicator
+
+    return textButton, buttonFrame
+end
+
+-- Crear botones
+local bodyESPButton = createButton("BodyESPButton", UDim2.new(0, 0, 0, 0), "ESP Cuerpo")
+local healthESPButton = createButton("HealthESPButton", UDim2.new(0, 0, 0, 80), "ESP Vida")
+local nameESPButton = createButton("NameESPButton", UDim2.new(0, 0, 0, 160), "ESP Nombre")
+
+-- ===== Función para toggle del menú =====
+local function toggleMenu()
+    isMenuVisible = not isMenuVisible
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    
+    if isMenuVisible then
+        -- Mostrar botones
+        for _, button in ipairs({bodyESPButton.Parent, healthESPButton.Parent, nameESPButton.Parent}) do
+            button.Visible = true
+        end
+        toggleIcon.Text = "▲"
+        TweenService:Create(toggleStroke, tweenInfo, {Color = Color3.fromRGB(100, 100, 120)}):Play()
+    else
+        -- Ocultar botones
+        for _, button in ipairs({bodyESPButton.Parent, healthESPButton.Parent, nameESPButton.Parent}) do
+            button.Visible = false
+        end
+        toggleIcon.Text = "▼"
+        TweenService:Create(toggleStroke, tweenInfo, {Color = Color3.fromRGB(0, 255, 150)}):Play()
+    end
+end
+
+toggleButton.MouseButton1Click:Connect(toggleMenu)
+
+-- Hover effect para toggle button
+toggleButton.MouseEnter:Connect(function()
+    TweenService:Create(toggleIcon, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+end)
+
+toggleButton.MouseLeave:Connect(function()
+    TweenService:Create(toggleIcon, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(150, 150, 160)}):Play()
+end)
+
+-- ===== Animaciones =====
+local function animateButton(button, isActive)
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local stroke = button:FindFirstChild("UIStroke")
+    local indicator = button:FindFirstChild("Indicator")
+    local icon = button:FindFirstChild("Icon")
+    local statusLabel = button:FindFirstChild("StatusLabel")
+    local stateLabel = button:FindFirstChild("StateLabel")
+    
+    if isActive then
+        TweenService:Create(stroke, tweenInfo, {Color = Color3.fromRGB(0, 255, 150)}):Play()
+        TweenService:Create(stroke, tweenInfo, {Transparency = 0}):Play()
+        TweenService:Create(indicator, tweenInfo, {BackgroundColor3 = Color3.fromRGB(0, 255, 150)}):Play()
+        TweenService:Create(icon, tweenInfo, {ImageColor3 = Color3.fromRGB(0, 255, 150)}):Play()
+        TweenService:Create(statusLabel, tweenInfo, {TextColor3 = Color3.fromRGB(0, 255, 150)}):Play()
+        TweenService:Create(stateLabel, tweenInfo, {TextColor3 = Color3.fromRGB(100, 255, 180)}):Play()
+        stateLabel.Text = "Activado"
+        
+        local pulse = TweenService:Create(indicator, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+            Size = UDim2.new(0, 12, 0, 12),
+            Position = UDim2.new(1, -21, 0.5, -6)
+        })
+        pulse:Play()
+    else
+        TweenService:Create(stroke, tweenInfo, {Color = Color3.fromRGB(100, 100, 120)}):Play()
+        TweenService:Create(stroke, tweenInfo, {Transparency = 0.5}):Play()
+        TweenService:Create(indicator, tweenInfo, {BackgroundColor3 = Color3.fromRGB(150, 150, 160)}):Play()
+        TweenService:Create(indicator, tweenInfo, {Size = UDim2.new(0, 10, 0, 10)}):Play()
+        TweenService:Create(indicator, tweenInfo, {Position = UDim2.new(1, -20, 0.5, -5)}):Play()
+        TweenService:Create(icon, tweenInfo, {ImageColor3 = Color3.fromRGB(150, 150, 160)}):Play()
+        TweenService:Create(statusLabel, tweenInfo, {TextColor3 = Color3.fromRGB(200, 200, 210)}):Play()
+        TweenService:Create(stateLabel, tweenInfo, {TextColor3 = Color3.fromRGB(120, 120, 130)}):Play()
+        stateLabel.Text = "Desactivado"
+    end
+end
+
+-- Efectos hover para todos los botones
+for _, button in ipairs({bodyESPButton, healthESPButton, nameESPButton}) do
+    button.MouseEnter:Connect(function()
+        if not dragging then
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            TweenService:Create(button, tweenInfo, {Size = UDim2.new(1, 5, 1, 5)}):Play()
+            TweenService:Create(button, tweenInfo, {Position = UDim2.new(0, -2.5, 0, -2.5)}):Play()
+        end
+    end)
+
+    button.MouseLeave:Connect(function()
+        if not dragging then
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            TweenService:Create(button, tweenInfo, {Size = UDim2.new(1, 0, 1, 0)}):Play()
+            TweenService:Create(button, tweenInfo, {Position = UDim2.new(0, 0, 0, 0)}):Play()
+        end
+    end)
+end
+
+-- ===== Funciones de ESP Cuerpo (Highlight) =====
+local function setupCharacterListeners(player)
+    if characterConnections[player] then
+        characterConnections[player]:Disconnect()
+    end
+    
+    characterConnections[player] = player.CharacterAdded:Connect(function(character)
+        if isBodyESPActive then
+            character:WaitForChild("Humanoid")
+            if not character:FindFirstChild("Highlight") then
+                Instance.new("Highlight", character)
+            end
+            UpdateBodyHighlights()
+        end
+    end)
+end
+
+function CreateBodyHighlight()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP then
+            if player.Character then
+                player.Character:WaitForChild("Humanoid")
+                if not player.Character:FindFirstChild("Highlight") then
+                    Instance.new("Highlight", character)
+                end
+            end
+            setupCharacterListeners(player)
+        end
+    end
+end
+
+function DeleteBodyHighlight()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            local highlight = player.Character:FindFirstChild("Highlight")
+            if highlight then
+                highlight:Destroy()
+            end
+        end
+        if characterConnections[player] then
+            characterConnections[player]:Disconnect()
+            characterConnections[player] = nil
+        end
+    end
+end
+
+function UpdateBodyHighlights()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("Highlight") then
+            local Highlight = player.Character:FindFirstChild("Highlight")
+            if player.Name == Sheriff and IsAlive(player) then
+                Highlight.FillColor = Color3.fromRGB(0, 0, 255)
+            elseif player.Name == Murder and IsAlive(player) then
+                Highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            elseif player.Name == Hero and IsAlive(player) and not IsAlive(game.Players[Sheriff]) then
+                Highlight.FillColor = Color3.fromRGB(255, 250, 0)
+            else
+                Highlight.FillColor = Color3.fromRGB(0, 255, 0)
+            end
+            Highlight.OutlineColor = Highlight.FillColor
+            Highlight.FillTransparency = 0.5
+            Highlight.OutlineTransparency = 0
+            Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        end
+    end
+end
+
+-- ===== Funciones de ESP Vida (MÁS GRANDE) =====
+local function createHealthBar(player)
+    if not player.Character then return end
+    local character = player.Character
+    local humanoid = character:FindFirstChild("Humanoid")
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    
+    if not humanoid or not hrp then return end
+    if hrp:FindFirstChild("HealthESP") then return end
+    
+    -- BillboardGui (más grande)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "HealthESP"
+    billboard.Adornee = hrp
+    billboard.Size = UDim2.new(6, 0, 0.8, 0)  -- Más ancho y más alto
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)  -- Un poco más arriba
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    -- Fondo de la barra (más grande)
+    local background = Instance.new("Frame")
+    background.Name = "Background"
+    background.Size = UDim2.new(1, 0, 0.4, 0)  -- Más alto
+    background.Position = UDim2.new(0, 0, 0.3, 0)
+    background.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    background.BorderSizePixel = 0
+    background.Parent = billboard
+    
+    local bgCorner = Instance.new("UICorner")
+    bgCorner.CornerRadius = UDim.new(0, 6)  -- Esquinas más redondeadas
+    bgCorner.Parent = background
+    
+    -- Barra de vida
+    local healthBar = Instance.new("Frame")
+    healthBar.Name = "HealthBar"
+    healthBar.Size = UDim2.new(1, 0, 1, 0)
+    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = background
+    
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(0, 6)
+    barCorner.Parent = healthBar
+    
+    -- Texto de vida (más grande)
+    local healthText = Instance.new("TextLabel")
+    healthText.Name = "HealthText"
+    healthText.Size = UDim2.new(1, 0, 0.6, 0)
+    healthText.Position = UDim2.new(0, 0, 0, 0)
+    healthText.BackgroundTransparency = 1
+    healthText.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+    healthText.TextColor3 = Color3.new(1, 1, 1)
+    healthText.TextScaled = true
+    healthText.Font = Enum.Font.GothamBold
+    healthText.TextStrokeTransparency = 0.3  -- Más visible
+    healthText.TextStrokeColor3 = Color3.new(0, 0, 0)
+    healthText.Parent = billboard
+    
+    -- Actualizar barra de vida
+    if healthBarConnections[player] then
+        healthBarConnections[player]:Disconnect()
+    end
+    
+    healthBarConnections[player] = humanoid.HealthChanged:Connect(function(health)
+        local healthPercent = math.clamp(health / humanoid.MaxHealth, 0, 1)
+        healthBar.Size = UDim2.new(healthPercent, 0, 1, 0)
+        healthText.Text = math.floor(health) .. "/" .. math.floor(humanoid.MaxHealth)
+        
+        -- Cambiar color según la vida
+        if healthPercent > 0.6 then
+            healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        elseif healthPercent > 0.3 then
+            healthBar.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+        else
+            healthBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    end)
+end
+
+local function deleteHealthBar(player)
+    if player.Character then
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local healthESP = hrp:FindFirstChild("HealthESP")
+            if healthESP then
+                healthESP:Destroy()
+            end
+        end
+    end
+    
+    if healthBarConnections[player] then
+        healthBarConnections[player]:Disconnect()
+        healthBarConnections[player] = nil
+    end
+end
+
+local function CreateHealthESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            createHealthBar(player)
+        end
+    end
+end
+
+local function DeleteHealthESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        deleteHealthBar(player)
+    end
+end
+
+-- ===== Funciones de ESP Nombre =====
+local function getPlayerRoleColor(player)
+    if player.Name == Sheriff and IsAlive(player) then
+        return Color3.fromRGB(0, 100, 255)
+    elseif player.Name == Murder and IsAlive(player) then
+        return Color3.fromRGB(255, 50, 50)
+    elseif player.Name == Hero and IsAlive(player) and not IsAlive(game.Players[Sheriff]) then
+        return Color3.fromRGB(255, 220, 0)
+    else
+        return Color3.fromRGB(100, 255, 100)
+    end
+end
+
+local function getPlayerRole(player)
+    if player.Name == Sheriff and IsAlive(player) then
+        return "Sheriff"
+    elseif player.Name == Murder and IsAlive(player) then
+        return "Asesino"
+    elseif player.Name == Hero and IsAlive(player) and not IsAlive(game.Players[Sheriff]) then
+        return "Héroe"
+    else
+        return "Inocente"
+    end
+end
+
+local function createNameESP(player)
+    if not player.Character then return end
+    local character = player.Character
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    
+    if not hrp then return end
+    if hrp:FindFirstChild("NameESP") then return end
+    
+    -- BillboardGui para el nombre
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "NameESP"
+    billboard.Adornee = hrp
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 5.2, 0)  -- Ajustado para estar más arriba
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    -- Frame contenedor
+    local container = Instance.new("Frame")
+    container.Name = "Container"
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    container.BackgroundTransparency = 0.3
+    container.BorderSizePixel = 0
+    container.Parent = billboard
+    
+    local containerCorner = Instance.new("UICorner")
+    containerCorner.CornerRadius = UDim.new(0, 8)
+    containerCorner.Parent = container
+    
+    -- Borde de color
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = getPlayerRoleColor(player)
+    stroke.Thickness = 2
+    stroke.Parent = container
+    
+    -- Nombre del jugador
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "NameLabel"
+    nameLabel.Size = UDim2.new(1, -10, 0.5, 0)
+    nameLabel.Position = UDim2.new(0, 5, 0, 2)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextSize = 16
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextStrokeTransparency = 0.5
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    nameLabel.Parent = container
+    
+    -- Rol del jugador
+    local roleLabel = Instance.new("TextLabel")
+    roleLabel.Name = "RoleLabel"
+    roleLabel.Size = UDim2.new(1, -10, 0.5, 0)
+    roleLabel.Position = UDim2.new(0, 5, 0.5, -2)
+    roleLabel.BackgroundTransparency = 1
+    roleLabel.Text = getPlayerRole(player)
+    roleLabel.TextColor3 = getPlayerRoleColor(player)
+    roleLabel.TextSize = 14
+    roleLabel.Font = Enum.Font.Gotham
+    roleLabel.TextStrokeTransparency = 0.5
+    roleLabel.TextXAlignment = Enum.TextXAlignment.Center
+    roleLabel.Parent = container
+    
+    -- Actualizar colores y rol constantemente
+    if nameESPConnections[player] then
+        nameESPConnections[player]:Disconnect()
+    end
+    
+    nameESPConnections[player] = RunService.Heartbeat:Connect(function()
+        if billboard and billboard.Parent then
+            local newColor = getPlayerRoleColor(player)
+            local newRole = getPlayerRole(player)
+            stroke.Color = newColor
+            roleLabel.TextColor3 = newColor
+            roleLabel.Text = newRole
+        end
+    end)
+end
+
+local function deleteNameESP(player)
+    if player.Character then
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local nameESP = hrp:FindFirstChild("NameESP")
+            if nameESP then
+                nameESP:Destroy()
+            end
+        end
+    end
+    
+    if nameESPConnections[player] then
+        nameESPConnections[player]:Disconnect()
+        nameESPConnections[player] = nil
+    end
+end
+
+local function CreateNameESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            createNameESP(player)
+        end
+    end
+end
+
+local function DeleteNameESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        deleteNameESP(player)
+    end
+end
+
+function IsAlive(player)
+    for name, data in pairs(roles) do
+        if player.Name == name then
+            return not data.Killed and not data.Dead
+        end
+    end
+    return false
+end
+
+-- ===== Actualizaciones de roles =====
+LP.CharacterAdded:Connect(function(character)
+    if isBodyESPActive then
+        CreateBodyHighlight()
+        UpdateBodyHighlights()
+    end
+    if isHealthESPActive then
+        CreateHealthESP()
+    end
+    if isNameESPActive then
+        CreateNameESP()
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    if isBodyESPActive then
+        setupCharacterListeners(player)
+    end
+    
+    player.CharacterAdded:Connect(function(character)
+        if isHealthESPActive then
+            task.wait(0.5)
+            createHealthBar(player)
+        end
+        if isNameESPActive then
+            task.wait(0.5)
+            createNameESP(player)
+        end
+    end)
+end)
+
+RunService.Heartbeat:Connect(function()
+    local success, data = pcall(function()
+        return ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+    end)
+    if success and data then
+        roles = data
+        for name, pdata in pairs(roles) do
+            if pdata.Role == "Murderer" then
+                Murder = name
+            elseif pdata.Role == 'Sheriff' then
+                Sheriff = name
+            elseif pdata.Role == 'Hero' then
+                Hero = name
+            end
+        end
+    end
+end)-- ===== Funciones de arrastre =====
+local function updateInput(input)
+    if dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end
+
+for _, button in ipairs({bodyESPButton, healthESPButton, nameESPButton, toggleButton}) do
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    button.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+end
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateInput(input)
+    end
+end)
+
+-- ===== Activar/Desactivar ESP Cuerpo =====
+bodyESPButton.MouseButton1Click:Connect(function()
+    if not isBodyESPActive then
+        isBodyESPActive = true
+        animateButton(bodyESPButton, true)
+        CreateBodyHighlight()
+        
+        if updateConnection then
+            updateConnection:Disconnect()
+        end
+        
+        updateConnection = RunService.Heartbeat:Connect(function()
+            UpdateBodyHighlights()
+        end)
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LP then
+                setupCharacterListeners(player)
+            end
+        end
+    else
+        isBodyESPActive = false
+        animateButton(bodyESPButton, false)
+        
+        if updateConnection then
+            updateConnection:Disconnect()
+            updateConnection = nil
+        end
+        
+        DeleteBodyHighlight()
+    end
+end)
+
+-- ===== Activar/Desactivar ESP Vida =====
+healthESPButton.MouseButton1Click:Connect(function()
+    if not isHealthESPActive then
+        isHealthESPActive = true
+        animateButton(healthESPButton, true)
+        CreateHealthESP()
+    else
+        isHealthESPActive = false
+        animateButton(healthESPButton, false)
+        DeleteHealthESP()
+    end
+end)
+
+-- ===== Activar/Desactivar ESP Nombre =====
+nameESPButton.MouseButton1Click:Connect(function()
+    if not isNameESPActive then
+        isNameESPActive = true
+        animateButton(nameESPButton, true)
+        CreateNameESP()
+    else
+        isNameESPActive = false
+        animateButton(nameESPButton, false)
+        DeleteNameESP()
+    end
+end)
